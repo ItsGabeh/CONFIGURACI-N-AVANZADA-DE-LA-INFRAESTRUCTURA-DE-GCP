@@ -121,3 +121,14 @@ Los resultados obtenidos fueron:
 
 ![Resultado de coverage](./assets/test_coverage.png)
 
+## Tecnologías utilizadas
+
+La función fue desarrollada utilizando Node.js y TypeScript junto con
+`@google-cloud/functions-framework` para definir el manejador del evento.
+
+Para las pruebas unitarias se utilizaron:
+
+- Mocha: ejecución y organización de los casos de prueba.
+- Sinon: observación de las llamadas a `console.log()` y `console.error()`.
+- Node Assert: validación de los resultados esperados.
+- c8: generación del reporte de cobertura de código.

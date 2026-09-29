@@ -1,5 +1,5 @@
-import { CloudEvent, cloudEvent } from "@google-cloud/functions-framework";
-import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
+import { type CloudEvent, cloudEvent } from "@google-cloud/functions-framework";
+import type { StorageObjectData } from "@google/events/cloud/storage/v1/StorageObjectData.js";
 
 /**
  * Cloud Function que extrae datos del archivo (nombre, tamaño y tipo) y registra los eventos en Cloud Logging.
@@ -9,7 +9,7 @@ import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObject
  * Cloud Run captura automáticamente la salida estándar (stdout) y de error (stderr) de la función
  * y envía estos registros a Cloud Logging, donde pueden consultarse mediante el Explorador de registros.
  */
-cloudEvent<StorageObjectData>("onArchivoSubido", (event: CloudEvent<StorageObjectData>) => {
+export function onArchivoSubido(event: CloudEvent<StorageObjectData>) {
     try {
         // Extraer la informacion del objeto data
         const file = event.data;
@@ -35,4 +35,6 @@ cloudEvent<StorageObjectData>("onArchivoSubido", (event: CloudEvent<StorageObjec
 
         throw error;
     }
-});
+}
+
+cloudEvent<StorageObjectData>("onArchivoSubido", onArchivoSubido);

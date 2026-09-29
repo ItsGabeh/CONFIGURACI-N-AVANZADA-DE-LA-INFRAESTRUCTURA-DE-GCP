@@ -14,10 +14,12 @@ export function onArchivoSubido(event: CloudEvent<StorageObjectData>) {
         // Extraer la informacion del objeto data
         const file = event.data;
 
+        // Typescript obliga a manejar el undefined tipado en el event.data
         if (!file) {
             throw new Error(`[ERROR] el evento no contiene datos`);
         }
 
+        // En caso de que un archivo llege sin nombre
         if (!file.name) {
             throw new Error(`[${file.bucket}] Error: el evento no contiene un nombre de archivo`);
         }
@@ -33,6 +35,7 @@ export function onArchivoSubido(event: CloudEvent<StorageObjectData>) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error(`${msg}`);
 
+        // Hacer que la ejecucion falle al final a proposito, evita que se interprete como un proceso sin errores
         throw error;
     }
 }

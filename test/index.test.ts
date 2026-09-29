@@ -41,7 +41,7 @@ describe("onArchivoSubido", () => {
             },
         };
 
-         // Crear un spy sobre console.log
+        // Crear un spy sobre console.log
         const logSpy = sinon.spy(console, "log");
 
         onArchivoSubido(event);
@@ -80,6 +80,34 @@ describe("onArchivoSubido", () => {
         // Comprobar que el error también fue registrado en console.error
         assert.equal(
             errorSpy.calledWith("[ERROR] el evento no contiene datos"),
+            true
+        );
+    });
+
+    it("Evento que genera un error cuando el archivo no contiene nombre", () => {
+        const event: CloudEvent<StorageObjectData> = {
+            specversion: "1.0",
+            id: "evento-test-003",
+            source: "//storage.googleapis.com/projects/_/buckets/test-bucket",
+            type: "google.cloud.storage.object.v1.finalized",
+            data: {
+                bucket: "test-bucket",
+                size: 1024,
+                contentType: "application/pdf",
+            },
+        };
+
+        const errorSpy = sinon.spy(console, "error");
+
+        assert.throws(
+            () => onArchivoSubido(event),
+            /Error: el evento no contiene un nombre de archivo/
+        );
+
+        assert.equal(
+            errorSpy.calledWith(
+                "[test-bucket] Error: el evento no contiene un nombre de archivo"
+            ),
             true
         );
     });

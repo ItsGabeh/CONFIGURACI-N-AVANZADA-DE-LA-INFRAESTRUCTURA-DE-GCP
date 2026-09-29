@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --loader ts-node/esm ./node_modules/mocha/bin/mocha.js \"test/**/*.test.ts\"",
+    "coverage": "c8 npm test"
   },
   "repository": {
     "type": "git",
@@ -13,7 +14,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/ItsGabeh/CONFIGURACI-N-AVANZADA-DE-LA-INFRAESTRUCTURA-DE-GCP/issues"
   },
@@ -30,6 +31,6 @@
     "mocha": "^12.0.2",
     "sinon": "^22.1.0",
     "ts-node": "^10.9.2",
-    "typescript": "^7.0.2"
+    "typescript": "^5.9.3"
   }
 }

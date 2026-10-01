@@ -19,12 +19,23 @@ import type { StorageObjectData } from "@google/events/cloud/storage/v1/StorageO
  * mientras que las aserciones comprueban que los resultados sean los esperados.
  */
 describe("onArchivoSubido", () => {
+
+    beforeEach(() => {
+        // Configuracion utilizada durante las pruebas
+        process.env.WEB_APP_URL = "https://example.com/webhook";
+        process.env.WEBHOOK_SECRET = "test-secret";
+    });
+
     // Después de cada prueba restaura los spies creados por Sinon
     afterEach(() => {
         sinon.restore();
+
+        delete process.env.WEB_APP_URL;
+        delete process.env.WEBHOOK_SECRET;
     });
 
-    it("Evento valido de Cloud Storage", () => {
+
+    it("Evento valido de Cloud Storage", async () => {
         // Evento falso que simula el evento enviado por
         // Cloud Storage cuando se termina de subir un archivo
         const event: CloudEvent<StorageObjectData> = {
@@ -38,27 +49,45 @@ describe("onArchivoSubido", () => {
                 name: "archivo-prueba.pdf",
                 size: 1024,
                 contentType: "application/pdf",
+                timeCreated: new Date().toISOString(),
             },
         };
+
+        // Simular respuesta correcta de Apps Script
+        const fetchStub = sinon.stub(globalThis, "fetch").resolves(
+            new Response(
+                JSON.stringify({
+                    success: true,
+                    message: "Archivo registrado"
+                }),
+                {
+                    status: 200,
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                }
+            )
+        );
 
         // Crear un spy sobre console.log
         const logSpy = sinon.spy(console, "log");
 
-        onArchivoSubido(event);
-        // Verificar que console.log se haya ejecutado una sola vez
-        assert.equal(logSpy.calledOnce, true);
+        await onArchivoSubido(event);
 
-        // Verificar que el mensaje registrado contiene exactamente
-        // los datos del archivo simulado
+        // Verificar que se registraron los datos del archivo
         assert.equal(
             logSpy.calledWith(
                 "[test-bucket] Archivo recibido: Nombre archivo-prueba.pdf, Tamaño: 1024, Tipo: application/pdf"
             ),
             true
         );
+
+        // Verificar que se realizó la petición a Apps Script
+        assert.equal(fetchStub.calledOnce, true);
     });
 
-    it("Evento que genera un error cuando el evento no contiene data", () => {
+
+    it("Evento que genera un error cuando el evento no contiene data", async () => {
         // Evento falso que simula el evento enviado por
         // Cloud Storage pero no tiene el objeto data
         const event: CloudEvent<StorageObjectData> = {
@@ -68,12 +97,12 @@ describe("onArchivoSubido", () => {
             type: "google.cloud.storage.object.v1.finalized",
         };
 
-        // Spy sobre console.log
+        // Spy sobre console.error
         const errorSpy = sinon.spy(console, "error");
 
         // Comprobar que la función lanza el error esperado
-        assert.throws(
-            () => onArchivoSubido(event),
+        await assert.rejects(
+            onArchivoSubido(event),
             /\[ERROR\] el evento no contiene datos/
         );
 
@@ -84,7 +113,8 @@ describe("onArchivoSubido", () => {
         );
     });
 
-    it("Evento que genera un error cuando el archivo no contiene nombre", () => {
+
+    it("Evento que genera un error cuando el archivo no contiene nombre", async () => {
         const event: CloudEvent<StorageObjectData> = {
             specversion: "1.0",
             id: "evento-test-003",
@@ -94,13 +124,14 @@ describe("onArchivoSubido", () => {
                 bucket: "test-bucket",
                 size: 1024,
                 contentType: "application/pdf",
+                timeCreated: new Date().toISOString(),
             },
         };
 
         const errorSpy = sinon.spy(console, "error");
 
-        assert.throws(
-            () => onArchivoSubido(event),
+        await assert.rejects(
+            onArchivoSubido(event),
             /Error: el evento no contiene un nombre de archivo/
         );
 
@@ -111,4 +142,164 @@ describe("onArchivoSubido", () => {
             true
         );
     });
-})
+
+
+    it("Genera error cuando WEBHOOK_SECRET no esta configurado", async () => {
+        delete process.env.WEBHOOK_SECRET;
+
+        const event: CloudEvent<StorageObjectData> = {
+            specversion: "1.0",
+            id: "evento-test-004",
+            source: "//storage.googleapis.com/projects/_/buckets/test-bucket",
+            type: "google.cloud.storage.object.v1.finalized",
+            data: {
+                bucket: "test-bucket",
+                name: "archivo-prueba.pdf",
+                size: 1024,
+                contentType: "application/pdf",
+                timeCreated: new Date().toISOString(),
+            },
+        };
+
+        const errorSpy = sinon.spy(console, "error");
+
+        await assert.rejects(
+            onArchivoSubido(event),
+            /WEBHOOK_SECRET no está configurado/
+        );
+
+        assert.equal(
+            errorSpy.calledWith(
+                "[ERROR] WEBHOOK_SECRET no está configurado"
+            ),
+            true
+        );
+    });
+
+
+    it("Envia los metadatos, timestamp y firma a Apps Script", async () => {
+        const event: CloudEvent<StorageObjectData> = {
+            specversion: "1.0",
+            id: "evento-test-005",
+            source: "//storage.googleapis.com/projects/_/buckets/test-bucket",
+            type: "google.cloud.storage.object.v1.finalized",
+            data: {
+                bucket: "test-bucket",
+                name: "reporte.pdf",
+                size: 2048,
+                contentType: "application/pdf",
+                timeCreated: "2026-10-01T15:00:00.000Z",
+            },
+        };
+
+        const fetchStub = sinon.stub(globalThis, "fetch").resolves(
+            new Response(
+                JSON.stringify({
+                    success: true
+                }),
+                {
+                    status: 200
+                }
+            )
+        );
+
+        await onArchivoSubido(event);
+
+        assert.equal(fetchStub.calledOnce, true);
+
+        // Obtener los argumentos enviados a fetch
+        const [url, options] = fetchStub.firstCall.args;
+
+        assert.equal(
+            url,
+            "https://example.com/webhook"
+        );
+
+        assert.equal(
+            options?.method,
+            "POST"
+        );
+
+        const body = JSON.parse(
+            options?.body as string
+        );
+
+        // Comprobar los metadatos enviados
+        assert.equal(
+            body.payload.eventId,
+            "evento-test-005"
+        );
+
+        assert.equal(
+            body.payload.bucket,
+            "test-bucket"
+        );
+
+        assert.equal(
+            body.payload.name,
+            "reporte.pdf"
+        );
+
+        assert.equal(
+            body.payload.size,
+            2048
+        );
+
+        // Comprobar que se generaron los datos de seguridad
+        assert.equal(
+            typeof body.timestamp,
+            "number"
+        );
+
+        assert.equal(
+            typeof body.signature,
+            "string"
+        );
+
+        assert.equal(
+            body.signature.length,
+            64
+        );
+    });
+
+
+    it("Genera error cuando Apps Script responde con error HTTP", async () => {
+        const event: CloudEvent<StorageObjectData> = {
+            specversion: "1.0",
+            id: "evento-test-006",
+            source: "//storage.googleapis.com/projects/_/buckets/test-bucket",
+            type: "google.cloud.storage.object.v1.finalized",
+            data: {
+                bucket: "test-bucket",
+                name: "archivo-error.pdf",
+                size: 1024,
+                contentType: "application/pdf",
+                timeCreated: new Date().toISOString(),
+            },
+        };
+
+        sinon.stub(globalThis, "fetch").resolves(
+            new Response(
+                JSON.stringify({
+                    success: false,
+                    message: "Firma invalida"
+                }),
+                {
+                    status: 500
+                }
+            )
+        );
+
+        const errorSpy = sinon.spy(console, "error");
+
+        await assert.rejects(
+            onArchivoSubido(event),
+            /Apps Script respondió con HTTP 500/
+        );
+
+        assert.equal(
+            errorSpy.called,
+            true
+        );
+    });
+});
